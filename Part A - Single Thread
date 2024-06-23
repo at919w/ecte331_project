@@ -1,0 +1,162 @@
+package projectA;
+
+import java.awt.Color;
+import java.awt.Graphics2D;
+import java.awt.image.BufferedImage;
+import java.awt.image.DataBufferByte;
+import java.io.File;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
+import javax.imageio.ImageIO;
+import javax.swing.ImageIcon;
+import javax.swing.JFrame;
+import javax.swing.JLabel;
+
+public class SThread {
+
+    public static short[][] grayScaleMatrix; // Stores the grayscale image data
+    public static int imageWidth; // Stores the image width
+    public static int imageHeight; // Stores the image height
+    private static BufferedImage srcImage; // Stores the source image
+    private static BufferedImage tmplImage; // Stores the template image
+
+    // IOException to handle any exceptions during file operations
+    public static void main(String[] args) throws IOException {
+        // Start time to calculate execution time
+        long startTime = System.currentTimeMillis();
+        // Paths for the source and template
+        String srcImagePath = "TenCardG.jpg";
+        String tmplImagePath = "Template.jpg";
+
+        // Read source image
+        File srcFile = new File(srcImagePath);
+        srcImage = ImageIO.read(srcFile);
+        short[][] srcGrayImage = GrayScaleconv(srcImagePath);
+
+        // Read template image
+        File tmplFile = new File(tmplImagePath);
+        tmplImage = ImageIO.read(tmplFile);
+        short[][] tmplGrayImage = GrayScaleconv(tmplImagePath);
+
+        // Perform template matching
+        TempMatch(srcGrayImage, tmplGrayImage);
+
+        // Save the result image
+        saveImage("Single Thread Result.jpg");
+
+        // Print to show the name of the file it is saved in
+        System.out.println("Image saved in -> Single Thread Result.jpg");
+
+        // Display the result image in a GUI window
+        displayImage("Single Thread Result.jpg", "Result");
+
+        // Verify if the file exists
+        File resultFile = new File("Single Thread Result.jpg");
+        if (resultFile.exists()) {
+            System.out.println("- Single Thread Result.jpg has been created -");
+        } else {
+            System.out.println("- Failed to create -");
+        }
+
+        // End time to calculate execution time
+        long endTime = System.currentTimeMillis();
+
+        // Calculate and print the execution time
+        long executionTime = endTime - startTime;
+        System.out.println("Execution time: " + executionTime + " ms");
+    }
+
+    // Convert an image to grayscale
+    public static short[][] GrayScaleconv(String filePath) throws IOException {
+        BufferedImage img = ImageIO.read(new File(filePath)); // Read image from file
+        imageWidth = img.getWidth(); // Get image width
+        imageHeight = img.getHeight(); // Get image height
+
+        byte[] pixelData = ((DataBufferByte) img.getRaster().getDataBuffer()).getData(); // Get pixel data
+        grayScaleMatrix = new short[imageHeight][imageWidth]; // Initialize grayscale matrix
+
+        int index, red, green, blue;
+        for (int i = 0; i < imageHeight; i++) {
+            for (int j = 0; j < imageWidth; j++) {
+                index = 3 * (i * imageWidth + j); // Calculate pixel index
+                red = pixelData[index] & 0xff; // Red channel
+                green = pixelData[index + 1] & 0xff; // Green channel
+                blue = pixelData[index + 2] & 0xff; // Blue channel
+                grayScaleMatrix[i][j] = (short) Math.round(0.299 * red + 0.587 * green + 0.114 * blue); // Convert to grayscale
+            }
+        }
+        return grayScaleMatrix; // Return grayscale matrix
+    }
+
+    // Perform template matching
+    public static void TempMatch(short[][] srcGrayImage, short[][] tmplGrayImage) {
+        int srcRows = srcGrayImage.length; // Rows in source image
+        int srcCols = srcGrayImage[0].length; // Columns in source image
+        int tmplRows = tmplGrayImage.length; // Rows in template image
+        int tmplCols = tmplGrayImage[0].length; // Columns in template image
+        int tmplSize = tmplRows * tmplCols; // Total pixels in the template
+        double minDifference = Double.MAX_VALUE; // Initialize minimum difference
+        double[][] absDiffMatrix = new double[srcRows - tmplRows + 1][srcCols - tmplCols + 1]; // Matrix to store absolute differences
+
+        // Iterate through the source image to find matches
+        for (int i = 0; i <= srcRows - tmplRows; i++) {
+            for (int j = 0; j <= srcCols - tmplCols; j++) {
+                double absDiff = 0.0;
+                for (int m = 0; m < tmplRows; m++) {
+                    for (int n = 0; n < tmplCols; n++) {
+                        absDiff += Math.abs(srcGrayImage[i + m][j + n] - tmplGrayImage[m][n]);
+                    }
+                }
+                absDiff /= tmplSize; // Calculate average absolute difference
+                absDiffMatrix[i][j] = absDiff;
+
+                if (absDiff < minDifference) {
+                    minDifference = absDiff; // Update minimum difference
+                }
+            }
+        }
+
+        double threshold = 10 * minDifference; // Threshold for matching
+
+        List<int[]> matchedRegions = new ArrayList<>(); // List to store matching regions
+        for (int i = 0; i <= srcRows - tmplRows; i++) {
+            for (int j = 0; j <= srcCols - tmplCols; j++) {
+                if (absDiffMatrix[i][j] <= threshold) {
+                    matchedRegions.add(new int[]{i, j}); // Add matching region
+                }
+            }
+        }
+
+        // Draw rectangles around matched regions
+        for (int[] region : matchedRegions) {
+            drawRectangle(srcImage, region[1], region[0], tmplCols, tmplRows);
+        }
+    }
+
+    // Draw a rectangle on an image
+    public static void drawRectangle(BufferedImage img, int x, int y, int width, int height) {
+        Graphics2D g2D = img.createGraphics(); // Create a Graphics2D object
+        g2D.setColor(Color.GREEN); // Set the color for the rectangle
+        g2D.drawRect(x, y, width, height); // Draw the rectangle
+        g2D.dispose(); // Dispose the Graphics2D object
+    }
+
+    // Save the result image
+    public static void saveImage(String fileName) throws IOException {
+        ImageIO.write(srcImage, "jpg", new File(fileName)); // Save the image
+    }
+
+    // Display an image in a GUI window
+    public static void displayImage(String filePath, String windowTitle) {
+        JFrame frame = new JFrame(windowTitle); // Create a JFrame with the specified title
+        frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE); // Exit application on window close
+
+        ImageIcon icon = new ImageIcon(filePath); // Create an ImageIcon from the image file
+        JLabel label = new JLabel(icon); // Create a JLabel to display the image
+        frame.add(label); // Add the JLabel to the JFrame
+
+        frame.pack(); // Pack the JFrame
+        frame.setVisible(true); // Make the JFrame visible
+    }
+}
